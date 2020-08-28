@@ -186,10 +186,6 @@ public:
     }
 
     explicit HTTPRequest(const std::string &plain_request) {
-    	std::ofstream ofstream("tmp");
-    	ofstream << plain_request;
-    	ofstream.close();
-
 	    try {
 		    int body_start = plain_request.find("\r\n\r\n");
 		    body = plain_request.substr(body_start + 4);

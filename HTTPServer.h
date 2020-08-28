@@ -17,7 +17,9 @@
 #include "HTTPResponse.h"
 
 const int HTTP_BASE_BUFFER_SIZE = 1024;
-const int HTTP_MAX_WAITING_CONNECTIONS = 1e4;
+const int HTTP_MAX_WAITING_CONNECTIONS = 1e6, MAX_THREADS = 3e4;
+
+char buffer[HTTP_BASE_BUFFER_SIZE];
 
 class HTTPServer {
 private:
@@ -27,8 +29,7 @@ private:
 
     static void serve(const std::function<HTTPResponse(HTTPRequest)> &handler, int new_socket) {
 	    std::string head_request;
-	    while (true){
-		    char buffer[HTTP_BASE_BUFFER_SIZE];
+	    while (true) {
 		    int t = read(new_socket, buffer, HTTP_BASE_BUFFER_SIZE - 1);
 		    if (t < 0) {
 			    perror("read error");
@@ -36,13 +37,14 @@ private:
 		    }
 		    buffer[t] = 0;
 		    head_request += buffer;
-		    if (t == 0 || t < HTTP_BASE_BUFFER_SIZE - 1 && head_request.find("\r\n\r\n") != std::string::npos) {
+		    if (t == 0 || t < HTTP_BASE_BUFFER_SIZE - 1 && head_request.find("\r\n\r\n")) {
 			    break;
 		    }
 	    }
 	    HTTPRequest request(head_request);
-	    if (!request.get_header("Content-Length"))
+	    if (!request.get_header("Content-Length")) {
 		    request.set_header("Content-Length", "0");
+	    }
 	    int remaining_body =
 		    stoi(request.get_header("Content-Length").value()) -
 		    (head_request.size() - head_request.find("\r\n\r\n") - 4);
@@ -58,6 +60,7 @@ private:
 		    request = HTTPRequest(full_request);
 	    }
 	    HTTPResponse response = handler(request);
+//	    HTTPResponse response(200, "");
 	    send(new_socket, response.to_string().data(), response.to_string().size(), 0);
 	    close(new_socket);
     }
@@ -100,8 +103,15 @@ public:
 			    perror("accept");
 			    continue;
 		    }
-		    sockets.push_back(new_socket);
+//		    close(new_socket);
+//		    continue;
+//		    sockets.push_back(new_socket);
+		    if (threads.size() >= MAX_THREADS) {
+			    threads[threads.size() - MAX_THREADS] -> join();
+			    delete threads[threads.size() - MAX_THREADS];
+		    }
 		    threads.push_back(new std::thread(serve, handler, new_socket));
+//		    serve(handler, new_socket);
 	    }
     }
 };
